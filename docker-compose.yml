@@ -1,0 +1,55 @@
+services:
+  web:
+    build: ./project
+    ports:
+      - "8000:8000"
+    command: uvicorn main:app --host 0.0.0.0 --reload
+    volumes:
+      - ./project:/app
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+  
+  worker:
+    build: ./project
+    command: celery -A worker.celery_app worker --loglevel=info
+    volumes:
+      - ./project:/app
+    depends_on:
+      - rabbitmq
+      - web
+
+  dashboard:
+    build: ./project
+    command: celery --broker=amqp://guest:guest@rabbitmq:5672// flower --broker_api=http://guest:guest@rabbitmq:15672/api --loglevel=info
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./project:/app
+    depends_on:
+      - web
+      - worker
+      - rabbitmq
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./project/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    depends_on:
+      - dashboard
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+
+  
